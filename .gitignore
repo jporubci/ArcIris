@@ -1,0 +1,5 @@
+**/.DS_Store
+**/__pycache__
+.venv
+_convnext_*_64_euclidean_checkpoint
+_resnet50_50_euclidean_checkpoint
