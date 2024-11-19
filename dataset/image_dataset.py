@@ -1,112 +1,101 @@
+from PIL import Image, ImageFilter
+from tqdm import tqdm
+import cv2
 import imgaug.augmenters as iaa
 import json
 import numpy as np
 import os
-from PIL import Image, ImageFilter
 import random
 
 
-def load_image(file):
-    return Image.open(file).convert("RGB")
-
-
 class ImageDataset:
-    def __init__(
-        self,
-        image_dir,
-        img_to_uid_map,
-        polar=False,
-        input_transform=None,
-        augment=True,
-        flip=False,
-        skip_not_found=False,
-    ):
+    def __init__(self, image_dir, img_to_uid_map, polar=False, input_transform=None, augment=True, flip=False, skip_not_found=False):
         super().__init__()
         self.image_dir = image_dir
         self.polar = polar
         self.skip_not_found = skip_not_found
         self.flip = flip
 
-        self.img_to_uid = {}
-        with open(img_to_uid_map, "r") as fp:
-            self.img_to_uid_old = json.load(fp)
-            for image_name in self.img_to_uid_old.keys():
-                image_name_new = image_name.split(".")[0] + "_p.png"
-                self.img_to_uid[image_name_new] = self.img_to_uid_old[image_name]
+        with open(img_to_uid_map, "r") as file:
+            self.img_to_uid_old = json.load(file)
 
-        uids = set()
+        s = {}
+        for image_path, uid in tqdm(self.img_to_uid_old.items()):
+            directory = os.path.join(image_dir, os.path.dirname(image_path))
+            filename, ext = os.path.splitext(os.path.basename(image_path))
+            if polar:
+                filename += "_p"
+            full_image_path = os.path.join(directory, f"{filename}{ext}")
+            full_image_mask_path = os.path.join(directory, f"{filename}{'m' if polar else '_m'}{ext}")
+            if os.path.exists(full_image_path) and os.path.exists(full_image_mask_path):
+                s[image_path] = uid
+        self.img_to_uid_old = s
 
-        for image_name in self.img_to_uid.keys():
-            uid = self.img_to_uid[image_name]
-            uids.add(uid)
-            if self.flip:
-                uids.add(uid + "_flip")
+        self.img_to_uid = {f"{image_name.split('.')[0]}{'_p' if polar else ''}.png": uid for image_name, uid in self.img_to_uid_old.items()}
 
-        uids = list(uids)
-        self.uid_to_label = {}
-        for i in range(len(uids)):
-            self.uid_to_label[uids[i]] = i
+        uids = {uid for uid in self.img_to_uid.values()} | {f"{uid}_flip" for uid in self.img_to_uid.values() if self.flip}
+        self.uid_to_label = {uid: idx for idx, uid in enumerate(uids)}
 
         self.input_transform = input_transform
         self.augment = augment
-
-        self.image_paths = []
-
-        for image_name in self.img_to_uid.keys():
-            image_path = os.path.join(image_dir, image_name)
-            self.image_paths.append(image_path)
-
+        self.image_paths = [os.path.join(image_dir, image_name) for image_name in self.img_to_uid]
         self.length = len(self.image_paths)
         self.heavy_augment_prob = 0.3
 
+
     def set_augment(self, value):
-        print("Augmenting?", value)
         self.augment = value
+        print(f"self.augment: {self.augment}")
+
 
     def set_augment_prob(self, prob):
         self.heavy_augment_prob = prob
-        print("Heavy Augmentation Probability set to:", self.heavy_augment_prob)
+        print(f"self.heavy_augment_prob: {self.heavy_augment_prob}")
+
 
     def __getitem__(self, index):
         # Get the image and the mask
-
         if self.skip_not_found:
             while not os.path.exists(self.image_paths[index]):
+                print(self.image_paths[index])
                 index += 1
 
         image_path = self.image_paths[index]
-        image = load_image(image_path)
         uid = self.img_to_uid[os.sep.join(image_path.split(os.sep)[-2:])]
         label = self.uid_to_label[uid]
 
+        image = Image.open(image_path).convert("RGB")
+
+        directory, filename = os.path.split(image_path)
+        filename, ext = os.path.splitext(filename)
+        mask_filename = f"{filename}{'m' if self.polar else '_m'}{ext}"
+        mask_path = os.path.join(directory, mask_filename)
+        image_mask = Image.open(mask_path).convert("1")
+        image_mask = np.array(image_mask)
+
+        blurred_image = np.array(image)
+        blurred_image[image_mask == 0] = cv2.GaussianBlur(blurred_image[image_mask == 0], (31, 31), 5)
+        image = Image.fromarray(blurred_image)
+
         # Data augmentation
         if self.augment:
-            # horizontal flip
             if random.random() < 0.5 and self.flip:
+                # Horizontal flip
                 image = image.transpose(Image.FLIP_LEFT_RIGHT)
-                label = self.uid_to_label[uid + "_flip"]
-            # Affine Transformations
+                label = self.uid_to_label[f"{uid}_flip"]
+            # Affine transformations
             if not self.polar:
-                aug = iaa.Affine(
-                    scale=(0.8, 1.25),
-                    translate_px={"x": (-15, 15), "y": (-15, 15)},
-                    rotate=(-30, 30),
-                    mode="constant",
-                    cval=random.randint(0, 255),
-                )
+                aug = iaa.Affine(scale=(0.8, 1.25), translate_px={"x": (-15, 15), "y": (-15, 15)}, rotate=(-30, 30), mode="constant", cval=random.randint(0, 255))
             else:
-                w, h = image.size
-                aug = iaa.Affine(
-                    translate_px={"x": (-int(w / 2), int(w / 2))}, mode="wrap"
-                )
-            # print(np.expand_dims(np.array(image), axis=0).shape)
+                w = image.size[0] // 2
+                aug = iaa.Affine(translate_px={"x": (-w, w)}, mode="wrap")
             img_np = aug(images=np.expand_dims(np.array(image), axis=0))
             image = Image.fromarray(img_np[0])
 
             if random.random() < self.heavy_augment_prob:
                 random_choice = np.random.choice([1, 2, 3, 4, 5, 6])
                 if random_choice == 1:
-                    # sharpening
+                    # Sharpening
                     random_degree = np.random.choice([1, 2, 3, 4, 5])
                     if random_degree == 1:
                         image = image.filter(ImageFilter.DETAIL)
@@ -121,7 +110,7 @@ class ImageDataset:
                         img_np = aug(images=np.expand_dims(np.array(image), axis=0))
                         image = Image.fromarray(img_np[0])
                 elif random_choice == 2:
-                    # blurring
+                    # Blurring
                     random_degree = np.random.choice([1, 2, 3])
                     if random_degree == 1:
                         aug = iaa.AverageBlur(k=(2, 3))
@@ -138,8 +127,8 @@ class ImageDataset:
                         aug = iaa.AdditiveLaplaceNoise(scale=5)
                     img_np = aug(images=np.expand_dims(np.array(image), axis=0))
                     image = Image.fromarray(img_np[0])
-                # Basic compression and expansion
                 elif random_choice == 4:
+                    # Basic compression and expansion
                     if random.random() < 0.5:
                         divider = random.random() + 1.2
                         cw, ch = image.size
@@ -174,11 +163,11 @@ class ImageDataset:
                         else:
                             image = image.resize((cw, ch), Image.BOX)
                     else:
-                        # JPEG compression
                         aug = iaa.JpegCompression(compression=(5, 50))
                         img_np = aug(images=np.expand_dims(np.array(image), axis=0))
                         image = Image.fromarray(img_np[0])
-                else:  # random contrast change
+                else:
+                    # Random contrast change
                     random_degree = np.random.choice([1, 2, 3, 4, 5, 6, 7, 8])
                     if random_degree == 1:
                         aug = iaa.GammaContrast((0.5, 1.0))
@@ -200,8 +189,8 @@ class ImageDataset:
             image = self.input_transform(image)
 
         data = {"images": image, "labels": label}
-
         return data
+
 
     def __len__(self):
         return self.length

@@ -1,5 +1,8 @@
 **/.DS_Store
 **/__pycache__
+*_checkpoint
+*_trainer_output.txt
 .venv
-_convnext_*_64_euclidean_checkpoint
-_resnet50_50_euclidean_checkpoint
+debug
+stderr
+stdout
