@@ -9,7 +9,7 @@ This code is based on [IrisTripletMining](https://github.com/Siamul/IrisTripletM
 [The ArcFace implementation](arcface_torch/losses.py) is from [the official arcface_torch repository](https://github.com/deepinsight/insightface/tree/master/recognition/arcface_torch).
 
 ## Setup
-[Python 3.9.18](https://www.python.org/downloads/release/python-3918/) was used.
+[Python 3.9.19](https://www.python.org/downloads/release/python-3919/) was used.
 
 1. Create a Python environment:
    ```
