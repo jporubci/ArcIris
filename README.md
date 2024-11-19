@@ -11,26 +11,31 @@ This code is based on [IrisTripletMining](https://github.com/Siamul/IrisTripletM
 ## Setup
 [Python 3.9.18](https://www.python.org/downloads/release/python-3918/) was used.
 
-1. ```
+1. Create a Python environment:
+   ```
    python3 -m venv .venv
    ```
-1. ```
+1. Activate it:
+   ```
    source .venv/bin/activate
    ```
-1. ```
+1. Install dependencies:
+   ```
    pip install -r requirements.txt
    ```
 
 ## Running Locally
-1. ```
-   python main.py
-   ```
+```
+python main.py
+```
 
 ## Running on CRC
-1. ```
+1. Submit the job:
+   ```
    qsub train.sh -notify
    ```
-1. ```
+1. Check your jobs:
+   ```
    qstat -u $USER
    ```
 
