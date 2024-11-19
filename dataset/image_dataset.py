@@ -57,7 +57,6 @@ class ImageDataset:
         # Get the image and the mask
         if self.skip_not_found:
             while not os.path.exists(self.image_paths[index]):
-                print(self.image_paths[index])
                 index += 1
 
         image_path = self.image_paths[index]
