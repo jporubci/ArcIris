@@ -14,7 +14,7 @@ def parse_args():
     parser.add_argument("--image_dir", type=str, default="/afs/crc/group/cvrl/czajka/gbir2/aczajka/BXGRID/iris_segmented_SegNet")
     parser.add_argument("--img_uid_map", type=str, default="img_to_uid_map.json")
     parser.add_argument("--log_batch", type=int, default=10)
-    parser.add_argument("--log_txt", type=bool, default=True, nargs='?', const=True)
+    parser.add_argument("--log_txt", type=bool, default=False, nargs='?', const=True)
     parser.add_argument("--lr", type=float, default=0.00001)
     parser.add_argument("--margin", type=float, default=None)
     parser.add_argument("--mode", default="train")

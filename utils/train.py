@@ -1,16 +1,13 @@
-from PIL import Image
-from arcface_torch import ArcFace
+from arcface_torch import CombinedMarginLoss
 from dataset import ImageDataset
-from functools import partial
+from PIL import Image
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
-from torchvision.models.convnext import LayerNorm2d
 from torchvision.transforms import Compose, Normalize, Resize, ToTensor
 import numpy as np
 import os
 import sys
 import torch
-import torch.nn as nn
 
 
 def train(args, model):
@@ -56,33 +53,18 @@ def train(args, model):
     print("training length:", len(loader))
     print("validation length:", len(val_loader), flush=True)
 
-    ################ Set model classifier ################
-    lastconv_output_channels = {
-        "convnext_tiny" :  768,
-        "convnext_small":  768,
-        "convnext_base" : 1024,
-        "convnext_large": 1536,
-    }
-
-    norm_layer = partial(LayerNorm2d, eps=1e-6)
-    model_type = args.model_type.lower()
-    output_channels = lastconv_output_channels[model_type]
-
-    print("Getting num_classes...", flush=True)
-    num_classes = len(set(label for _, label in dataset))
-    print(f"num_classes: {num_classes}", flush=True)
-
-    model.classifier = nn.Sequential(norm_layer(output_channels), nn.Flatten(), nn.Linear(output_channels, num_classes))
-
-    optimizer = torch.optim.SGD(model.parameters(), lr = args.lr, momentum=0.9, weight_decay=0.0005)
-    ######################################################
 
     best_val_loss_average = float("inf")
-    margin_loss = ArcFace()
+
+    # Classifier based on the number of identities in the dataset
+    model.classifier[-1] = torch.nn.Linear(model.classifier[-1].in_features, dataset.num_classes)
+    optimizer = torch.optim.SGD(model.parameters(), lr = args.lr, momentum=0.9, weight_decay=0.0005)
+    criterion = torch.nn.CrossEntropyLoss()
+    combined_margin_loss = CombinedMarginLoss(64.0, 1.0, 0.5, 0.0)
 
     if args.cuda:
         scaler = torch.GradScaler()
-        margin_loss = margin_loss.cuda()
+        combined_margin_loss = combined_margin_loss.cuda()
 
     if args.margin is None:
         args.margin = 1.0 if args.distance_type == "euclidean" else 0.05
@@ -112,25 +94,26 @@ def train(args, model):
 
             labels = data["labels"]
 
+            optimizer.zero_grad()
             if args.cuda:
                 images = images.cuda()
                 labels = labels.cuda()
 
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     embeddings = model(images)
-                    loss = margin_loss(embeddings, labels)
+                    logits = combined_margin_loss(embeddings, labels)
+                    loss = criterion(logits, labels)
 
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
-                optimizer.zero_grad()
 
             else:
                 embeddings = model(images)
-                loss = margin_loss(embeddings, labels)
+                logits = combined_margin_loss(embeddings, labels)
+                loss = criterion(logits, labels)
                 loss.backward()
                 optimizer.step()
-                optimizer.zero_grad(set_to_none=True)
 
             # compute IoU
             epoch_loss.append(loss.item())
@@ -158,9 +141,10 @@ def train(args, model):
                         images = images.cuda()
                         labels = labels.cuda()
 
-                    outputs = model(images)
-                    val_loss = margin_loss(outputs, labels)
-                    val_epoch_loss.append(val_loss.item())
+                    embeddings = model(images)
+                    logits = combined_margin_loss(embeddings, labels)
+                    loss = criterion(logits, labels)
+                    val_epoch_loss.append(loss.item())
 
                 val_loss_average = sum(val_epoch_loss) / len(val_epoch_loss)
 

@@ -35,6 +35,8 @@ class ImageDataset:
 
         uids = {uid for uid in self.img_to_uid.values()} | {f"{uid}_flip" for uid in self.img_to_uid.values() if self.flip}
         self.uid_to_label = {uid: idx for idx, uid in enumerate(uids)}
+        self.num_classes = len(uids)
+        print(f"num_classes: {self.num_classes}", flush=True)
 
         self.input_transform = input_transform
         self.augment = augment

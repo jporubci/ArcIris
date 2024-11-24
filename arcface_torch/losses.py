@@ -26,12 +26,7 @@ import math
 
 
 class CombinedMarginLoss(torch.nn.Module):
-    def __init__(self, 
-                 s, 
-                 m1,
-                 m2,
-                 m3,
-                 interclass_filtering_threshold=0):
+    def __init__(self, s, m1, m2, m3, interclass_filtering_threshold=0):
         super().__init__()
         self.s = s
         self.m1 = m1
@@ -47,42 +42,41 @@ class CombinedMarginLoss(torch.nn.Module):
         self.easy_margin = False
 
 
-    def forward(self, logits, labels):
-        index_positive = torch.where(labels != -1)[0]
+    def forward(self, logits: torch.Tensor, labels: torch.Tensor):
+        indexes = torch.arange(logits.size(0))
 
         if self.interclass_filtering_threshold > 0:
             with torch.no_grad():
                 dirty = logits > self.interclass_filtering_threshold
                 dirty = dirty.float()
-                mask = torch.ones([index_positive.size(0), logits.size(1)], device=logits.device)
-                mask.scatter_(1, labels[index_positive], 0)
-                dirty[index_positive] *= mask
+                mask = torch.ones([indexes.size(0), logits.size(1)], device=logits.device)
+                mask.scatter_(1, labels[indexes], 0)
+                dirty[indexes] *= mask
                 tensor_mul = 1 - dirty    
             logits = tensor_mul * logits
 
-        target_logit = logits[index_positive, labels[index_positive].view(-1)]
+        target_logit = logits[indexes, labels[indexes].view(-1)]
 
         if self.m1 == 1.0 and self.m3 == 0.0:
             with torch.no_grad():
                 target_logit.arccos_()
                 logits.arccos_()
                 final_target_logit = target_logit + self.m2
-                logits[index_positive, labels[index_positive].view(-1)] = final_target_logit
+                logits[indexes, labels[indexes].view(-1)] = final_target_logit
                 logits.cos_()
             logits = logits * self.s        
 
         elif self.m3 > 0:
             final_target_logit = target_logit - self.m3
-            logits[index_positive, labels[index_positive].view(-1)] = final_target_logit
+            logits[indexes, labels[indexes].view(-1)] = final_target_logit
             logits = logits * self.s
         else:
             raise
 
         return logits
 
+""" ArcFace (https://arxiv.org/pdf/1801.07698v4): """
 class ArcFace(torch.nn.Module):
-    """ ArcFace (https://arxiv.org/pdf/1801.07698v1.pdf):
-    """
     def __init__(self, s=64.0, margin=0.5):
         super(ArcFace, self).__init__()
         self.s = s
@@ -95,16 +89,16 @@ class ArcFace(torch.nn.Module):
 
 
     def forward(self, logits: torch.Tensor, labels: torch.Tensor):
-        index = torch.where(labels != -1)[0]
-        target_logit = logits[index, labels[index].view(-1)]
+        indexes = torch.arange(logits.size(0))
+        target_logit = logits[indexes, labels[indexes].view(-1)]
 
         with torch.no_grad():
             target_logit.arccos_()
             logits.arccos_()
             final_target_logit = target_logit + self.margin
-            logits[index, labels[index].view(-1)] = final_target_logit
+            logits[indexes, labels[indexes].view(-1)] = final_target_logit
             logits.cos_()
-        logits = logits * self.s   
+        logits = logits * self.s
         return logits
 
 
@@ -115,9 +109,9 @@ class CosFace(torch.nn.Module):
         self.m = m
 
     def forward(self, logits: torch.Tensor, labels: torch.Tensor):
-        index = torch.where(labels != -1)[0]
-        target_logit = logits[index, labels[index].view(-1)]
+        indexes = torch.arange(logits.size(0))
+        target_logit = logits[indexes, labels[indexes].view(-1)]
         final_target_logit = target_logit - self.m
-        logits[index, labels[index].view(-1)] = final_target_logit
+        logits[indexes, labels[indexes].view(-1)] = final_target_logit
         logits = logits * self.s
         return logits
