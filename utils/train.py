@@ -15,9 +15,13 @@ def train(args, model):
     input_transform = Compose([Resize(input_shape), ToTensor(), Normalize(mean=(0.5,), std=(0.5,))])
 
     if args.log_txt:
-        sys.stdout = open(f"{args.tag}_{args.model_type.lower()}_{args.stem_width}_{args.distance_type}_trainer_output.txt", "a")
+        stdout_file = os.path.join(args.output_dir, f"{args.tag}_{args.model_type.lower()}_{args.stem_width}_{args.distance_type}_trainer_output.txt")
+        if os.path.exists(stdout_file):
+            os.remove(stdout_file)
+        sys.stdout = open(stdout_file, "a")
 
-    directory = os.path.dirname(f"./{args.tag}_{args.model_type.lower()}_{args.stem_width}_{args.distance_type}_checkpoint")
+    directory = os.path.dirname(os.path.join(args.output_dir, f"{args.tag}_{args.model_type.lower()}_{args.stem_width}_{args.distance_type}_checkpoint"))
+    debug_dir = os.path.join(args.output_dir, "debug")
 
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -57,7 +61,10 @@ def train(args, model):
     best_val_loss_average = float("inf")
 
     # Classifier based on the number of identities in the dataset
-    model.classifier[-1] = torch.nn.Linear(model.classifier[-1].in_features, dataset.num_classes)
+    if args.cuda and torch.cuda.device_count() > 1 and args.multi_gpu:
+        model.module.classifier[-1] = torch.nn.Linear(model.module.classifier[-1].in_features, dataset.num_classes).to("cuda")
+    else:
+        model.classifier[-1] = torch.nn.Linear(model.classifier[-1].in_features, dataset.num_classes)
     optimizer = torch.optim.SGD(model.parameters(), lr = args.lr, momentum=0.9, weight_decay=0.0005)
     criterion = torch.nn.CrossEntropyLoss()
     combined_margin_loss = CombinedMarginLoss(64.0, 1.0, 0.5, 0.0)
@@ -79,8 +86,8 @@ def train(args, model):
             images = images.repeat(1, 3, 1, 1)
 
             if args.debug:
-                if not os.path.exists("debug"):
-                    os.mkdir("debug")
+                if not os.path.exists(debug_dir):
+                    os.mkdir(debug_dir)
 
                 for i in range(images.shape[0]):
                     image = images[i][0].clone().detach().cpu().numpy()
@@ -88,7 +95,7 @@ def train(args, model):
                     image = np.clip(image, 0, 1)
                     image = (image * 255).astype(np.uint8)
                     image_pil = Image.fromarray(image, "L")
-                    image_pil.save(os.path.join("debug", f"{i}.png"))
+                    image_pil.save(os.path.join(debug_dir, f"{i}.png"))
 
                 args.debug = False
 
@@ -116,14 +123,15 @@ def train(args, model):
                 optimizer.step()
 
             # compute IoU
+            print(f"Batch: {batch}\nLoss: {loss.item()}")
             epoch_loss.append(loss.item())
 
             if batch % args.log_batch == 0:
-                print(f"Train loss: {sum(epoch_loss) / len(epoch_loss)} (epoch: {epoch}, batch: {batch}/{len(loader)})", flush=True)
+                print(f"Train loss: {sum(epoch_loss)} / {len(epoch_loss)} = {sum(epoch_loss) / len(epoch_loss)} (epoch: {epoch}, batch: {batch}/{len(loader)})", flush=True)
 
             if args.log_txt:
                 sys.stdout.close()
-                sys.stdout = open(f"{args.tag}_{args.model_type.lower()}_{args.stem_width}_{args.distance_type}_trainer_output.txt", "a")
+                sys.stdout = open(stdout_file, "a")
 
         # Validation set
         if len(val_loader) > 0:
@@ -152,7 +160,7 @@ def train(args, model):
 
                 if args.log_txt:
                     sys.stdout.close()
-                    sys.stdout = open(f"{args.tag}_{args.model_type.lower()}_{args.stem_width}_{args.distance_type}_trainer_output.txt", "a")
+                    sys.stdout = open(stdout_file, "a")
 
                 if val_loss_average < best_val_loss_average:
                     # Save checkpoint
@@ -162,7 +170,7 @@ def train(args, model):
 
             if args.log_txt:
                 sys.stdout.close()
-                sys.stdout = open(f"{args.tag}_{args.model_type.lower()}_{args.stem_width}_{args.distance_type}_trainer_output.txt", "a")
+                sys.stdout = open(stdout_file, "a")
 
     if args.log_txt:
         sys.stdout.close()

@@ -3,12 +3,12 @@
 #$ -M jporubci@nd.edu
 #$ -N ArcIris
 #$ -q gpu
-#$ -l gpu=4
+#$ -l gpu=2
 #$ -l h="qa-a10*|qa-rtx6k*"
-#$ -o "/afs/crc.nd.edu/user/j/jporubci/Private/Fall 2024/ArcIris/stdout"
-#$ -e "/afs/crc.nd.edu/user/j/jporubci/Private/Fall 2024/ArcIris/stderr"
+#$ -o "/afs/crc.nd.edu/user/j/jporubci/Private/Fall 2024/ArcIris/output/stdout"
+#$ -e "/afs/crc.nd.edu/user/j/jporubci/Private/Fall 2024/ArcIris/output/stderr"
 
-FLUSH_TIMEOUT_SECONDS=900
+FLUSH_TIMEOUT_SECONDS=60
 fsync -d "$FLUSH_TIMEOUT_SECONDS" "$SGE_STDERR_PATH" &
 fsync -d "$FLUSH_TIMEOUT_SECONDS" "$SGE_STDOUT_PATH" &
 
@@ -16,7 +16,7 @@ cd "/afs/crc.nd.edu/user/j/jporubci/Private/Fall 2024/ArcIris"
 source "/afs/crc.nd.edu/user/j/jporubci/Private/Fall 2024/ArcIris/.venv/bin/activate"
 
 python main.py \
-  --batch_size 128 \
+  --batch_size 32 \
   --cuda \
   --cudnn \
   --debug \

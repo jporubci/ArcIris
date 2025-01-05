@@ -22,6 +22,7 @@ def parse_args():
     parser.add_argument("--multi_gpu", type=bool, default=False, nargs='?', const=True)
     parser.add_argument("--num_epochs", type=int, default=2001)
     parser.add_argument("--num_workers", type=int, default=2)
+    parser.add_argument("--output_dir", type=str, default="/afs/crc.nd.edu/user/j/jporubci/Private/Fall 2024/ArcIris/output")
     parser.add_argument("--polar", type=bool, default=True, nargs='?', const=True)
     parser.add_argument("--state")
     parser.add_argument("--stem_width", type=int, default=64)
