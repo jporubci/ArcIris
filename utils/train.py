@@ -70,7 +70,7 @@ def train(args, model):
         model.train()
         epoch_loss = []
 
-        for batch, data in enumerate(loader):
+        for batch, data in enumerate(loader, 1):
             # Setup input
             images = data["images"]
             images = images.repeat(1, 3, 1, 1)
