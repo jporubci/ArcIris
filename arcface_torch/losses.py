@@ -46,25 +46,25 @@ class CombinedMarginLoss(torch.nn.Module):
         indexes = torch.arange(logits.size(0))
 
         if self.interclass_filtering_threshold > 0:
-            with torch.no_grad():
-                dirty = logits > self.interclass_filtering_threshold
-                dirty = dirty.float()
-                mask = torch.ones([indexes.size(0), logits.size(1)], device=logits.device)
-                mask.scatter_(1, labels[indexes], 0)
-                dirty[indexes] *= mask
-                tensor_mul = 1 - dirty    
+            #with torch.no_grad():
+            dirty = logits > self.interclass_filtering_threshold
+            dirty = dirty.float()
+            mask = torch.ones([indexes.size(0), logits.size(1)], device=logits.device)
+            mask.scatter_(1, labels[indexes], 0)
+            dirty[indexes] *= mask
+            tensor_mul = 1 - dirty
             logits = tensor_mul * logits
 
         target_logit = logits[indexes, labels[indexes].view(-1)]
 
         if self.m1 == 1.0 and self.m3 == 0.0:
-            with torch.no_grad():
-                target_logit.arccos_()
-                logits.arccos_()
-                final_target_logit = target_logit + self.m2
-                logits[indexes, labels[indexes].view(-1)] = final_target_logit
-                logits.cos_()
-            logits = logits * self.s        
+            #with torch.no_grad():
+            target_logit.arccos_()
+            logits.arccos_()
+            final_target_logit = target_logit + self.m2
+            logits[indexes, labels[indexes].view(-1)] = final_target_logit
+            logits.cos_()
+            logits = logits * self.s
 
         elif self.m3 > 0:
             final_target_logit = target_logit - self.m3
@@ -72,7 +72,6 @@ class CombinedMarginLoss(torch.nn.Module):
             logits = logits * self.s
         else:
             raise
-
         return logits
 
 """ ArcFace (https://arxiv.org/pdf/1801.07698v4): """

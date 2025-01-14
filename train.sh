@@ -16,7 +16,7 @@ cd "/afs/crc.nd.edu/user/j/jporubci/Private/Fall 2024/ArcIris"
 source "/afs/crc.nd.edu/user/j/jporubci/Private/Fall 2024/ArcIris/.venv/bin/activate"
 
 python main.py \
-  --batch_size 32 \
+  --batch_size 128 \
   --cuda \
   --cudnn \
   --debug \
@@ -25,7 +25,6 @@ python main.py \
   --image_dir "/afs/crc/group/cvrl/czajka/gbir2/aczajka/BXGRID/iris_segmented_SegNet" \
   --img_uid_map "/afs/crc.nd.edu/user/j/jporubci/Private/Fall 2024/ArcIris/img_to_uid_map.json" \
   --log_batch 16 \
-  --log_txt \
   --lr 0.00001 \
   --margin 2.0 \
   --mode train \

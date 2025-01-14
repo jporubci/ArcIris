@@ -6,7 +6,6 @@ from torch.utils.data import random_split
 from torchvision.transforms import Compose, Normalize, Resize, ToTensor
 import numpy as np
 import os
-import sys
 import torch
 
 
@@ -14,15 +13,7 @@ def train(args, model):
     input_shape = (64, 512) if args.polar else (256, 256)
     input_transform = Compose([Resize(input_shape), ToTensor(), Normalize(mean=(0.5,), std=(0.5,))])
 
-    if args.log_txt:
-        stdout_file = os.path.join(args.output_dir, f"{args.tag}_{args.model_type.lower()}_{args.stem_width}_{args.distance_type}_trainer_output.txt")
-        if os.path.exists(stdout_file):
-            os.remove(stdout_file)
-        sys.stdout = open(stdout_file, "a")
-
     directory = os.path.dirname(os.path.join(args.output_dir, f"{args.tag}_{args.model_type.lower()}_{args.stem_width}_{args.distance_type}_checkpoint"))
-    debug_dir = os.path.join(args.output_dir, "debug")
-
     if not os.path.exists(directory):
         os.makedirs(directory)
 
@@ -57,7 +48,6 @@ def train(args, model):
     print("training length:", len(loader))
     print("validation length:", len(val_loader), flush=True)
 
-
     best_val_loss_average = float("inf")
 
     # Classifier based on the number of identities in the dataset
@@ -86,6 +76,7 @@ def train(args, model):
             images = images.repeat(1, 3, 1, 1)
 
             if args.debug:
+                debug_dir = os.path.join(args.output_dir, "debug")
                 if not os.path.exists(debug_dir):
                     os.mkdir(debug_dir)
 
@@ -108,6 +99,7 @@ def train(args, model):
 
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     embeddings = model(images)
+                    embeddings = embeddings.clamp(-1, 1)
                     logits = combined_margin_loss(embeddings, labels)
                     loss = criterion(logits, labels)
 
@@ -117,6 +109,7 @@ def train(args, model):
 
             else:
                 embeddings = model(images)
+                embeddings = embeddings.clamp(-1, 1)
                 logits = combined_margin_loss(embeddings, labels)
                 loss = criterion(logits, labels)
                 loss.backward()
@@ -128,10 +121,6 @@ def train(args, model):
 
             if batch % args.log_batch == 0:
                 print(f"Train loss: {sum(epoch_loss)} / {len(epoch_loss)} = {sum(epoch_loss) / len(epoch_loss)} (epoch: {epoch}, batch: {batch}/{len(loader)})", flush=True)
-
-            if args.log_txt:
-                sys.stdout.close()
-                sys.stdout = open(stdout_file, "a")
 
         # Validation set
         if len(val_loader) > 0:
@@ -150,6 +139,7 @@ def train(args, model):
                         labels = labels.cuda()
 
                     embeddings = model(images)
+                    embeddings = embeddings.clamp(-1, 1)
                     logits = combined_margin_loss(embeddings, labels)
                     loss = criterion(logits, labels)
                     val_epoch_loss.append(loss.item())
@@ -158,19 +148,8 @@ def train(args, model):
 
                 print(f"Val loss: {val_loss_average} (epoch: {epoch})", flush=True)
 
-                if args.log_txt:
-                    sys.stdout.close()
-                    sys.stdout = open(stdout_file, "a")
-
                 if val_loss_average < best_val_loss_average:
                     # Save checkpoint
                     best_val_loss_average = val_loss_average
                     filename = os.path.join(directory, f"{args.model_type}-{epoch:03}-{round(val_loss_average, 6)}.pth")
                     torch.save(model.module.state_dict() if args.multi_gpu else model.state_dict(), filename)
-
-            if args.log_txt:
-                sys.stdout.close()
-                sys.stdout = open(stdout_file, "a")
-
-    if args.log_txt:
-        sys.stdout.close()

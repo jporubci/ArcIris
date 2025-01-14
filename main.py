@@ -1,10 +1,15 @@
 from torchvision import models
+import os
 from utils import parse_args, train
 import torch
 import torch.nn as nn
 
 
 def main(args):
+    stdout_path = os.path.join(args.output_dir, "stdout")
+    if not os.path.exists(stdout_path):
+        os.remove(stdout_path)
+
     model_type = args.model_type.lower()
     if model_type.startswith("convnext"):
         if model_type == "convnext_tiny":
