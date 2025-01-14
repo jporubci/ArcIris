@@ -1,5 +1,4 @@
 from PIL import Image, ImageFilter
-from tqdm import tqdm
 import cv2
 import imgaug.augmenters as iaa
 import json
@@ -20,7 +19,7 @@ class ImageDataset:
             self.img_to_uid_old = json.load(file)
 
         s = {}
-        for image_path, uid in tqdm(self.img_to_uid_old.items()):
+        for image_path, uid in self.img_to_uid_old.items():
             directory = os.path.join(image_dir, os.path.dirname(image_path))
             filename, ext = os.path.splitext(os.path.basename(image_path))
             if polar:
@@ -36,7 +35,6 @@ class ImageDataset:
         uids = {uid for uid in self.img_to_uid.values()} | {f"{uid}_flip" for uid in self.img_to_uid.values() if self.flip}
         self.uid_to_label = {uid: idx for idx, uid in enumerate(uids)}
         self.num_classes = len(uids)
-        print(f"num_classes: {self.num_classes}", flush=True)
 
         self.input_transform = input_transform
         self.augment = augment
